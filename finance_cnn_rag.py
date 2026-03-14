@@ -1,16 +1,3 @@
-"""
-Finance CNN + RAG Model
-=======================
-Architecture:
-  - CNN branch:   Conv1D layers over OHLCV price windows → 256d embedding
-  - RAG branch:   FAISS retrieval + FinBERT encoder → 256d context embedding
-  - Fusion:       Cross-attention (CNN query, RAG key/value)
-  - Output heads: Return regression · Direction classification · Volatility
-
-Requirements:
-    pip install torch transformers faiss-cpu sentence-transformers numpy pandas
-"""
-
 import math
 import torch
 import torch.nn as nn
@@ -19,11 +6,7 @@ import numpy as np
 from transformers import AutoTokenizer, AutoModel, BertTokenizer, BertModel
 from typing import List, Tuple, Optional
 
-
-# ─────────────────────────────────────────────
 # 1. CNN BRANCH — price pattern extractor
-# ─────────────────────────────────────────────
-
 class CNNBranch(nn.Module):
     """
     Input:  (batch, timesteps, n_features)  e.g. (32, 30, 5) for 30-day OHLCV
@@ -50,7 +33,7 @@ class CNNBranch(nn.Module):
         self.pool = nn.AdaptiveMaxPool1d(1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # x: (batch, timesteps, features) → transpose to (batch, features, timesteps)
+        
         x = x.transpose(1, 2)
 
         x = F.relu(self.bn1(self.conv1(x)))
@@ -60,11 +43,7 @@ class CNNBranch(nn.Module):
         x = self.pool(x).squeeze(-1)          # (batch, embed_dim)
         return x
 
-
-# ─────────────────────────────────────────────
 # 2. RAG BRANCH — document retrieval + encoding
-# ─────────────────────────────────────────────
-
 class FinBERTEncoder(nn.Module):
     """
     Encodes retrieved financial text chunks with FinBERT,
@@ -75,9 +54,9 @@ class FinBERTEncoder(nn.Module):
         super().__init__()
         self.tokenizer = BertTokenizer.from_pretrained(model_name)
         self.bert = BertModel.from_pretrained(model_name)
-        hidden_size    = self.bert.config.hidden_size          # 768 for base BERT
+        hidden_size    = self.bert.config.hidden_size          
 
-        # Project FinBERT CLS token → shared embed_dim
+       
         self.proj = nn.Sequential(
             nn.Linear(hidden_size, embed_dim),
             nn.LayerNorm(embed_dim),
@@ -100,9 +79,8 @@ class FinBERTEncoder(nn.Module):
         with torch.no_grad():
             out = self.bert(**enc)
 
-        cls = out.last_hidden_state[:, 0, :]   # CLS token: (N, 768)
-        return self.proj(cls)                   # (N, embed_dim)
-
+        cls = out.last_hidden_state[:, 0, :]  
+        return self.proj(cls)                   
 
 class VectorStore:
     """
@@ -112,13 +90,13 @@ class VectorStore:
 
     def __init__(self, embed_dim: int = 768):
         import faiss
-        self.index  = faiss.IndexFlatIP(embed_dim)   # inner product (cosine after normalise)
-        self.docs   = []                              # parallel list of raw text chunks
+        self.index  = faiss.IndexFlatIP(embed_dim)  
+        self.docs   = []                             
         self.embed_dim = embed_dim
 
     def add(self, texts: List[str], embeddings: np.ndarray):
         """Add documents with their embeddings."""
-        # L2-normalise so inner product == cosine similarity
+        
         norms = np.linalg.norm(embeddings, axis=1, keepdims=True) + 1e-9
         embeddings = embeddings / norms
         self.index.add(embeddings.astype(np.float32))
@@ -133,12 +111,7 @@ class VectorStore:
         for idx_list in indices:
             results.append([self.docs[i] for i in idx_list if i < len(self.docs)])
         return results
-
-
-# ─────────────────────────────────────────────
 # 3. CROSS-ATTENTION FUSION
-# ─────────────────────────────────────────────
-
 class CrossAttentionFusion(nn.Module):
     """
     CNN embedding acts as QUERY.
@@ -167,21 +140,16 @@ class CrossAttentionFusion(nn.Module):
 
     def forward(
         self,
-        cnn_emb: torch.Tensor,      # (batch, embed_dim)
-        rag_chunks: torch.Tensor,   # (batch, n_chunks, embed_dim)
+        cnn_emb: torch.Tensor,      
+        rag_chunks: torch.Tensor,   
     ) -> torch.Tensor:
 
-        query = cnn_emb.unsqueeze(1)                        # (batch, 1, embed_dim)
+        query = cnn_emb.unsqueeze(1)                       
         attn_out, _ = self.attn(query, rag_chunks, rag_chunks)
-        fused = self.norm1(query + attn_out).squeeze(1)     # residual + norm
-        fused = self.norm2(fused + self.ff(fused))          # FFN + residual
-        return fused                                        # (batch, embed_dim)
-
-
-# ─────────────────────────────────────────────
+        fused = self.norm1(query + attn_out).squeeze(1)     
+        fused = self.norm2(fused + self.ff(fused))          
+        return fused                                       
 # 4. OUTPUT HEADS
-# ─────────────────────────────────────────────
-
 class OutputHeads(nn.Module):
     """
     Multi-task output heads sharing the fused representation.
@@ -200,9 +168,9 @@ class OutputHeads(nn.Module):
             nn.Dropout(dropout),
         )
         self.shared      = shared
-        self.ret_head    = nn.Linear(128, 3)   # 1d, 5d, 20d returns
-        self.dir_head    = nn.Linear(128, 3)   # direction classification
-        self.vol_head    = nn.Linear(128, 1)   # volatility regression
+        self.ret_head    = nn.Linear(128, 3)  
+        self.dir_head    = nn.Linear(128, 3)   
+        self.vol_head    = nn.Linear(128, 1)   
 
     def forward(self, x: torch.Tensor):
         h = self.shared(x)
@@ -213,9 +181,9 @@ class OutputHeads(nn.Module):
         }
 
 
-# ─────────────────────────────────────────────
+
 # 5. FULL MODEL
-# ─────────────────────────────────────────────
+
 
 class FinanceCNNRAG(nn.Module):
     """
@@ -254,26 +222,17 @@ class FinanceCNNRAG(nn.Module):
         batch_size = price_window.size(0)
 
         # --- CNN branch ---
-        cnn_emb = self.cnn(price_window)                     # (batch, embed_dim)
-
-        # --- RAG branch: encode retrieved docs per sample ---
-        # Flatten all chunks, encode in one pass, then reshape
+        cnn_emb = self.cnn(price_window)                    
+        
         all_texts   = [t for sample_docs in doc_texts for t in sample_docs]
-        n_chunks    = len(doc_texts[0])                      # assume same k per sample
-        chunk_embs  = self.encoder(all_texts, device)        # (batch*k, embed_dim)
+        n_chunks    = len(doc_texts[0])                      
+        chunk_embs  = self.encoder(all_texts, device)        
         rag_chunks  = chunk_embs.view(batch_size, n_chunks, self.embed_dim)
+        fused = self.fusion(cnn_emb, rag_chunks)             
 
-        # --- Cross-attention fusion ---
-        fused = self.fusion(cnn_emb, rag_chunks)             # (batch, embed_dim)
-
-        # --- Multi-task output ---
+      
         return self.heads(fused)
-
-
-# ─────────────────────────────────────────────
 # 6. LOSS FUNCTION
-# ─────────────────────────────────────────────
-
 class MultiTaskLoss(nn.Module):
     """
     Learnable task weighting via log-variance (Kendall et al., 2018).
@@ -282,7 +241,6 @@ class MultiTaskLoss(nn.Module):
 
     def __init__(self):
         super().__init__()
-        # log(sigma^2) per task — learned, initialised near 0
         self.log_vars = nn.Parameter(torch.zeros(3))
 
     def forward(self, preds: dict, targets: dict) -> torch.Tensor:
@@ -297,11 +255,7 @@ class MultiTaskLoss(nn.Module):
             total = total + precision * loss + self.log_vars[i]
         return total
 
-
-# ─────────────────────────────────────────────
 # 7. DATA UTILITIES
-# ─────────────────────────────────────────────
-
 def normalise_window(window: np.ndarray) -> np.ndarray:
     """
     Per-window z-score normalisation.
@@ -314,8 +268,8 @@ def normalise_window(window: np.ndarray) -> np.ndarray:
 
 
 def make_targets(
-    prices:     np.ndarray,     # close prices, length T
-    t:          int,            # current index
+    prices:     np.ndarray,  
+    t:          int,            
     vol_window: int = 20,
 ) -> dict:
     """
@@ -325,12 +279,8 @@ def make_targets(
     ret_1d  = (prices[t + 1]  / prices[t] - 1)
     ret_5d  = (prices[t + 5]  / prices[t] - 1)
     ret_20d = (prices[t + 20] / prices[t] - 1)
-
-    # Direction: -1 (down), 0 (flat), +1 (up) with ±0.5% dead zone
     direction = 1 if ret_5d > 0.005 else (-1 if ret_5d < -0.005 else 0)
-    direction = direction + 1                                # shift to 0/1/2 for CE loss
-
-    # Realised vol (log-scale)
+    direction = direction + 1                               
     log_rets = np.diff(np.log(prices[t - vol_window:t + 1]))
     vol = np.log(log_rets.std() * math.sqrt(252) + 1e-8)
 
@@ -339,16 +289,13 @@ def make_targets(
         "direction":  torch.tensor(direction, dtype=torch.long),
         "volatility": torch.tensor([vol], dtype=torch.float),
     }
-
-
-# ─────────────────────────────────────────────
 # 8. TRAINING LOOP (walk-forward)
-# ─────────────────────────────────────────────
+
 
 def walk_forward_train(
     model:       FinanceCNNRAG,
-    price_data:  np.ndarray,        # (T, n_features) — OHLCV
-    doc_fetcher,                    # callable(ticker, date) → List[str]
+    price_data:  np.ndarray,        
+    doc_fetcher,                    
     ticker:      str,
     dates:       List[str],
     window:      int = 30,
@@ -370,9 +317,9 @@ def walk_forward_train(
     )
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
 
-    T          = len(price_data) - window - 20   # leave 20 for 20d forward returns
+    T          = len(price_data) - window - 20   
     split_idx  = int(T * train_frac)
-    close      = price_data[:, 3]                # close price column
+    close      = price_data[:, 3]                
 
     for epoch in range(epochs):
         model.train()
@@ -382,9 +329,7 @@ def walk_forward_train(
             raw_win  = price_data[t - window:t]
             norm_win = normalise_window(raw_win)
             x_price  = torch.tensor(norm_win, dtype=torch.float).unsqueeze(0).to(device)
-
-            # Retrieve docs — only use documents published BEFORE date t (no leakage)
-            docs = doc_fetcher(ticker, dates[t])   # returns List[str], max top_k
+            docs = doc_fetcher(ticker, dates[t])  
             targets = make_targets(close, t)
             targets = {k: v.unsqueeze(0).to(device) for k, v in targets.items()}
 
@@ -403,26 +348,19 @@ def walk_forward_train(
 
     return model
 
-
-# ─────────────────────────────────────────────
-# 9. QUICK SMOKE TEST (no real data needed)
-# ─────────────────────────────────────────────
-
 if __name__ == "__main__":
     print("Running smoke test...")
     device = torch.device("cpu")
 
     model = FinanceCNNRAG(
         n_features=5,
-        embed_dim=64,    # smaller for the test
+        embed_dim=64,    
         n_heads=4,
         finbert_model="ProsusAI/finbert",
     )
 
-    # Fake OHLCV batch: 2 samples × 30 days × 5 features
     price_window = torch.randn(2, 30, 5)
 
-    # Fake retrieved docs (3 chunks per sample)
     doc_texts = [
         ["Q3 earnings beat estimates by 12%.",
          "Management raised full-year guidance.",
@@ -434,7 +372,7 @@ if __name__ == "__main__":
 
     preds = model(price_window, doc_texts, device)
 
-    print("returns shape:   ", preds["returns"].shape)     # (2, 3)
-    print("direction shape: ", preds["direction"].shape)   # (2, 3)
-    print("volatility shape:", preds["volatility"].shape)  # (2, 1)
+    print("returns shape:   ", preds["returns"].shape)     
+    print("direction shape: ", preds["direction"].shape)  
+    print("volatility shape:", preds["volatility"].shape)   
     print("Smoke test passed.")

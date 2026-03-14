@@ -1,19 +1,3 @@
-"""
-Finance CNN+RAG Backend — FastAPI
-==================================
-Endpoints:
-  GET  /predict/{ticker}        — run full CNN+RAG inference
-  GET  /history/{ticker}        — OHLCV price history
-  GET  /sentiment/{ticker}      — RAG document sentiment
-  GET  /tickers                 — supported tickers
-  WS   /stream/{ticker}         — live price stream (simulated)
-
-Run:
-    pip install fastapi uvicorn yfinance torch transformers faiss-cpu \
-                sentence-transformers pandas numpy requests beautifulsoup4
-    uvicorn main:app --reload --port 8000
-"""
-
 import asyncio
 import math
 import time
@@ -34,9 +18,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from transformers import BertTokenizer, BertModel
 
-# ─────────────────────────────────────────────
+
 # App setup
-# ─────────────────────────────────────────────
+
 
 app = FastAPI(title="Finance CNN+RAG API", version="1.0.0")
 
@@ -53,9 +37,9 @@ SUPPORTED_TICKERS = [
     "NFLX", "AMD", "INTC", "PYPL", "UBER",
 ]
 
-# ─────────────────────────────────────────────
+
 # CNN Model
-# ─────────────────────────────────────────────
+
 
 class CNNBranch(nn.Module):
     def __init__(self, n_features=5, embed_dim=128):
@@ -133,9 +117,9 @@ class FinanceCNNRAG(nn.Module):
         return preds
 
 
-# ─────────────────────────────────────────────
+
 # Global model + encoder (loaded once)
-# ─────────────────────────────────────────────
+
 
 device    = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 cnn_model = FinanceCNNRAG(embed_dim=128).to(device).eval()
@@ -145,10 +129,10 @@ tokenizer   = BertTokenizer.from_pretrained("ProsusAI/finbert")
 bert_model  = BertModel.from_pretrained("ProsusAI/finbert").to(device).eval()
 print("Models ready.")
 
-# ─────────────────────────────────────────────
+
 # Finance news corpus — curated sentences used
 # as stand-in RAG documents (no API key needed)
-# ─────────────────────────────────────────────
+
 
 FINANCE_CORPUS = [
     # Bullish signals
@@ -204,18 +188,18 @@ corpus_norm = corpus_np / norms
 faiss_index = faiss.IndexFlatIP(768)
 faiss_index.add(corpus_norm)
 
-# ─────────────────────────────────────────────
+
 # Helper functions
-# ─────────────────────────────────────────────
+
 
 def fetch_ohlcv(ticker: str, window: int = 60) -> pd.DataFrame:
-    """Download last `window` trading days of OHLCV from Yahoo Finance."""
     end   = datetime.today()
-    start = end - timedelta(days=window * 2)   # extra buffer for weekends/holidays
+    start = end - timedelta(days=window * 2)
     df = yf.download(ticker, start=start, end=end, progress=False, auto_adjust=True)
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
     df = df[["Open", "High", "Low", "Close", "Volume"]].dropna()
     return df.tail(window)
-
 
 def normalise_window(arr: np.ndarray) -> np.ndarray:
     """Per-window z-score normalisation."""
@@ -285,9 +269,9 @@ def compute_technicals(df: pd.DataFrame) -> dict:
     }
 
 
-# ─────────────────────────────────────────────
+
 # Response models
-# ─────────────────────────────────────────────
+
 
 class PredictionResponse(BaseModel):
     ticker:         str
@@ -308,9 +292,9 @@ class HistoryResponse(BaseModel):
     ohlcv:   List[dict]
 
 
-# ─────────────────────────────────────────────
+
 # Routes
-# ─────────────────────────────────────────────
+
 
 @app.get("/")
 def root():
@@ -335,11 +319,11 @@ def get_history(ticker: str, days: int = 60):
     records = []
     for _, row in df.iterrows():
         records.append({
-            "open":   round(float(row["Open"].iloc[0]) if hasattr(row["Open"], "iloc") else float(row["Open"]), 2),
-            "high":   round(float(row["High"].iloc[0] if hasattr(row["High"], "iloc") else row["High"]), 2),
-            "low":    round(float(row["Low"].iloc[0] if hasattr(row["Low"], "iloc") else row["Low"]), 2),
-            "close":  round(float(row["Close"].iloc[0] if hasattr(row["Close"], "iloc") else row["Close"]), 2),
-            "volume": int(row["Volume"].iloc[0] if hasattr(row["Volume"], "iloc") else row["Volume"]),
+            "open":   round(float(row["Open"]), 2),
+            "high":   round(float(row["High"]), 2),
+            "low":    round(float(row["Low"]), 2),
+            "close":  round(float(row["Close"]), 2),
+            "volume": int(row["Volume"]),
         })
 
     return HistoryResponse(
@@ -463,9 +447,9 @@ def get_sentiment(ticker: str):
     }
 
 
-# ─────────────────────────────────────────────
+
 # WebSocket — live price stream
-# ─────────────────────────────────────────────
+
 
 @app.websocket("/stream/{ticker}")
 async def stream_price(websocket: WebSocket, ticker: str):
@@ -473,7 +457,7 @@ async def stream_price(websocket: WebSocket, ticker: str):
     ticker = ticker.upper()
     try:
         df    = fetch_ohlcv(ticker, window=5)
-        price = float(df["Close"].values.flatten()[-1])
+        price = float(df["Close"].values[-1])
         while True:
             # Simulate live tick with small random walk
             price += price * np.random.normal(0, 0.0008)
