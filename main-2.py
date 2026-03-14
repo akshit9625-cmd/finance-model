@@ -1,19 +1,3 @@
-"""
-Finance CNN+RAG Backend — FastAPI
-==================================
-Endpoints:
-  GET  /predict/{ticker}        — run full CNN+RAG inference
-  GET  /history/{ticker}        — OHLCV price history
-  GET  /sentiment/{ticker}      — RAG document sentiment
-  GET  /tickers                 — supported tickers
-  WS   /stream/{ticker}         — live price stream (simulated)
-
-Run:
-    pip install fastapi uvicorn yfinance torch transformers faiss-cpu \
-                sentence-transformers pandas numpy requests beautifulsoup4
-    uvicorn main:app --reload --port 8000
-"""
-
 import asyncio
 import math
 import time
@@ -34,9 +18,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from transformers import BertTokenizer, BertModel
 
-# ─────────────────────────────────────────────
+
 # App setup
-# ─────────────────────────────────────────────
+
 
 app = FastAPI(title="Finance CNN+RAG API", version="1.0.0")
 
@@ -53,9 +37,9 @@ SUPPORTED_TICKERS = [
     "NFLX", "AMD", "INTC", "PYPL", "UBER",
 ]
 
-# ─────────────────────────────────────────────
+
 # CNN Model
-# ─────────────────────────────────────────────
+
 
 class CNNBranch(nn.Module):
     def __init__(self, n_features=5, embed_dim=128):
@@ -133,9 +117,9 @@ class FinanceCNNRAG(nn.Module):
         return preds
 
 
-# ─────────────────────────────────────────────
+
 # Global model + encoder (loaded once)
-# ─────────────────────────────────────────────
+
 
 device    = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 cnn_model = FinanceCNNRAG(embed_dim=128).to(device).eval()
@@ -145,10 +129,10 @@ tokenizer   = BertTokenizer.from_pretrained("ProsusAI/finbert")
 bert_model  = BertModel.from_pretrained("ProsusAI/finbert").to(device).eval()
 print("Models ready.")
 
-# ─────────────────────────────────────────────
+
 # Finance news corpus — curated sentences used
 # as stand-in RAG documents (no API key needed)
-# ─────────────────────────────────────────────
+
 
 FINANCE_CORPUS = [
     # Bullish signals
@@ -204,9 +188,9 @@ corpus_norm = corpus_np / norms
 faiss_index = faiss.IndexFlatIP(768)
 faiss_index.add(corpus_norm)
 
-# ─────────────────────────────────────────────
+
 # Helper functions
-# ─────────────────────────────────────────────
+
 
 def fetch_ohlcv(ticker: str, window: int = 60) -> pd.DataFrame:
     end   = datetime.today()
@@ -285,9 +269,9 @@ def compute_technicals(df: pd.DataFrame) -> dict:
     }
 
 
-# ─────────────────────────────────────────────
+
 # Response models
-# ─────────────────────────────────────────────
+
 
 class PredictionResponse(BaseModel):
     ticker:         str
@@ -308,9 +292,9 @@ class HistoryResponse(BaseModel):
     ohlcv:   List[dict]
 
 
-# ─────────────────────────────────────────────
+
 # Routes
-# ─────────────────────────────────────────────
+
 
 @app.get("/")
 def root():
@@ -463,9 +447,9 @@ def get_sentiment(ticker: str):
     }
 
 
-# ─────────────────────────────────────────────
+
 # WebSocket — live price stream
-# ─────────────────────────────────────────────
+
 
 @app.websocket("/stream/{ticker}")
 async def stream_price(websocket: WebSocket, ticker: str):
