@@ -1,0 +1,10 @@
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+alpha-frontend/node_modules/
+alpha-frontend/dist/
+.env
+*.dylib
+*.so
