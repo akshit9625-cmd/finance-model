@@ -372,7 +372,7 @@ if __name__ == "__main__":
 
     preds = model(price_window, doc_texts, device)
 
-    print("returns shape:   ", preds["returns"].shape)     
+    print("returns shape:   ", preds["returns"].shape)    
     print("direction shape: ", preds["direction"].shape)  
     print("volatility shape:", preds["volatility"].shape)   
     print("Smoke test passed.")
