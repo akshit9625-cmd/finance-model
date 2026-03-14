@@ -1,0 +1,90 @@
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500;700&display=swap');
+
+:root {
+  --ink:        #0a0b0f;
+  --ink2:       #0f1117;
+  --ink3:       #141720;
+  --glass:      rgba(255,255,255,0.03);
+  --glass2:     rgba(255,255,255,0.06);
+  --border:     rgba(255,255,255,0.07);
+  --border2:    rgba(255,255,255,0.13);
+  --text:       #e8eaf0;
+  --muted:      #5a6178;
+  --dim:        #3a3f52;
+  --cyan:       #00f5d4;
+  --cyan-dim:   rgba(0,245,212,0.12);
+  --green:      #00e676;
+  --green-dim:  rgba(0,230,118,0.1);
+  --red:        #ff5252;
+  --red-dim:    rgba(255,82,82,0.1);
+  --amber:      #ffab40;
+  --amber-dim:  rgba(255,171,64,0.1);
+  --blue:       #448aff;
+}
+
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  background: var(--ink);
+  color: var(--text);
+  font-family: 'Syne', sans-serif;
+  font-size: 14px;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    linear-gradient(rgba(0,245,212,0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,245,212,0.015) 1px, transparent 1px);
+  background-size: 60px 60px;
+}
+
+#root {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--dim); border-radius: 2px; }
+
+/* Keyframes */
+@keyframes breathe {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: .6; transform: scale(.8); }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(20px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes shimmer {
+  to { background-position: -200% 0; }
+}
+
+@keyframes flash {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .5; }
+}
+
+.fade-in { animation: fadeInUp .35s ease both; }
+.fade-in-1 { animation: fadeInUp .35s .06s ease both; }
+.fade-in-2 { animation: fadeInUp .35s .12s ease both; }
+.fade-in-3 { animation: fadeInUp .35s .18s ease both; }
+
+button { cursor: pointer; font-family: inherit; }

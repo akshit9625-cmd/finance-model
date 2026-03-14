@@ -1,0 +1,13 @@
+fastapi
+uvicorn[standard]
+yfinance
+torch
+transformers
+faiss-cpu
+sentence-transformers
+pandas
+numpy
+requests
+beautifulsoup4
+sentencepiece
+protobuf
